@@ -786,30 +786,121 @@ function doSwitch(){S.line=S.line===4?1:S.line+1;document.getElementById('tb-lin
 function startTmr(){if(tmrIv)clearInterval(tmrIv);tmrSec=0;document.getElementById('timer-i').textContent=SHIFTS[S.shift].sh+' смена · '+SHIFTS[S.shift].t;tmrIv=setInterval(()=>{tmrSec++;const h=String(Math.floor(tmrSec/3600)).padStart(2,'0'),m=String(Math.floor(tmrSec%3600/60)).padStart(2,'0'),s=String(tmrSec%60).padStart(2,'0');document.getElementById('timer-c').textContent=`${h}:${m}:${s}`;},1000);}
 function stopTmr(){if(tmrIv){clearInterval(tmrIv);tmrIv=null;}}
 
-// PDF
+// PDF — открывает красивый HTML-отчёт в новом окне → Ctrl+P / Сохранить как PDF
 function doPDF(){
-  const{jsPDF}=window.jspdf,doc=new jsPDF();
   const tf=Object.values(LINES).reduce((a,v)=>a+v.fact,0),tp=Object.values(LINES).reduce((a,v)=>a+v.plan,0);
-  const pct=((tf/tp)*100).toFixed(1);const sh=SHIFTS[S.shift];
-  doc.setFillColor(108,60,225);doc.rect(0,0,210,30,'F');
-  doc.setTextColor(255,255,255);doc.setFontSize(22);doc.setFont(undefined,'bold');doc.text('CVPC',18,17);
-  doc.setFontSize(9);doc.setFont(undefined,'normal');doc.text('Conveyor Vision Production Counter',18,24);
-  doc.setFontSize(11);doc.text('Отчёт по смене',155,17);
-  doc.setTextColor(30,41,59);doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Информация о смене',18,44);
-  doc.setFontSize(11);doc.setFont(undefined,'normal');
-  doc.text('Линия: '+LINES[S.line].name,18,54);doc.text('Смена: '+sh.lbl,18,62);doc.text('Дата: '+S.date,18,70);
-  doc.setDrawColor(226,232,240);doc.line(18,77,192,77);
-  doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Ключевые показатели',18,88);
-  const ks=[['Общий выпуск',tf.toLocaleString('ru')+' шт.'],['Плановый выпуск',tp.toLocaleString('ru')+' шт.'],['Выполнение плана',pct+'%'],['Отклонение','+'+(tf-tp).toLocaleString('ru')+' шт.']];
-  doc.setFontSize(11);ks.forEach(([k,v],i)=>{doc.setFont(undefined,'normal');doc.setTextColor(100,116,139);doc.text(k,18,100+i*11);doc.setFont(undefined,'bold');doc.setTextColor(30,41,59);doc.text(v,110,100+i*11);});
-  doc.line(18,148,192,148);
-  doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Детализация по линиям',18,160);
-  const cx=[18,90,118,148,172];const hh=['Линия','Статус','План','Факт','Вып.'];
-  doc.setFontSize(9);doc.setTextColor(148,163,184);hh.forEach((h,i)=>doc.text(h,cx[i],170));doc.line(18,172,192,172);
-  doc.setFontSize(10);Object.entries(LINES).forEach(([,ln],i)=>{const y=182+i*12;doc.setFont(undefined,'normal');doc.setTextColor(30,41,59);doc.text(ln.name,cx[0],y);doc.setTextColor(ln.status==='Работает'?34:249,ln.status==='Работает'?197:115,ln.status==='Работает'?94:22);doc.text(ln.status,cx[1],y);doc.setTextColor(30,41,59);doc.text(String(ln.plan),cx[2],y);doc.text(String(ln.fact),cx[3],y);doc.text(((ln.fact/ln.plan)*100).toFixed(1)+'%',cx[4],y);});
-  doc.setTextColor(148,163,184);doc.setFontSize(8);doc.text('Сформировано: '+new Date().toLocaleString('ru')+' · CVPC v1.2.0',18,286);
-  doc.save('CVPC_Отчёт_'+S.date.replace(/\./g,'-')+'.pdf');
-  toast('PDF-отчёт загружен 📄');
+  const pct=((tf/tp)*100).toFixed(1), dev=tf-tp, devStr=(dev>=0?'+':'')+dev;
+  const sh=SHIFTS[S.shift], l=LINES[S.line];
+  const devColor=dev>=0?'#16A34A':'#DC2626';
+
+  const lineRows=Object.values(LINES).map(ln=>{
+    const lp=((ln.fact/ln.plan)*100).toFixed(1);
+    const lc=+lp>=100?'#16A34A':+lp>=90?'#F97316':'#DC2626';
+    const sc=ln.status==='Работает'?'#16A34A':'#EA580C';
+    const bw=Math.min(+lp,100);
+    return `<tr>
+      <td style="padding:10px 14px;border-bottom:1px solid #E2E8F0;font-weight:600;">${ln.name}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #E2E8F0;"><span style="color:${sc};font-weight:700;font-size:12px;">● ${ln.status}</span></td>
+      <td style="padding:10px 14px;border-bottom:1px solid #E2E8F0;font-family:monospace;">${ln.plan.toLocaleString('ru')}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #E2E8F0;font-family:monospace;">${ln.fact.toLocaleString('ru')}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #E2E8F0;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:6px;background:#E2E8F0;border-radius:3px;overflow:hidden;"><div style="width:${bw}%;height:100%;background:${lc};border-radius:3px;"></div></div>
+          <span style="font-weight:800;color:${lc};font-family:monospace;min-width:50px;">${lp}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const verRows=[
+    ['21.04 15:26:32','EVT-329185','Камера 1','VALIDATED','#16A34A','#DCFCE7','Илья Петров'],
+    ['21.04 13:50:21','EVT-329107','Камера 2','MANUALLY_CORRECTED','#1D4ED8','#EFF6FF','Мария Смирнова'],
+    ['21.04 11:02:18','EVT-329045','Камера 3','REJECTED','#DC2626','#FEF2F2','Илья Петров'],
+  ].map(([t,e,c,st,stc,stbg,u])=>`<tr>
+    <td style="padding:9px 14px;border-bottom:1px solid #E2E8F0;font-family:monospace;font-size:12px;">${t}</td>
+    <td style="padding:9px 14px;border-bottom:1px solid #E2E8F0;font-family:monospace;font-weight:700;color:#6C3CE1;">${e}</td>
+    <td style="padding:9px 14px;border-bottom:1px solid #E2E8F0;">${c}</td>
+    <td style="padding:9px 14px;border-bottom:1px solid #E2E8F0;"><span style="background:${stbg};color:${stc};padding:3px 8px;border-radius:4px;font-size:10px;font-weight:800;">${st}</span></td>
+    <td style="padding:9px 14px;border-bottom:1px solid #E2E8F0;">${u}</td>
+  </tr>`).join('');
+
+  const html=`<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8">
+<title>CVPC — Отчёт ${S.date}</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Manrope',Arial,sans-serif;color:#1E293B;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+@page{size:A4;margin:0;}
+.pbar{position:fixed;top:0;left:0;right:0;background:#1E293B;padding:11px 28px;display:flex;align-items:center;justify-content:space-between;z-index:99;box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.pbar span{color:#CBD5E1;font-size:13px;font-weight:600;}
+.pb{background:#6C3CE1;color:#fff;border:none;padding:9px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s;}
+.pb:hover{background:#5228CC;}
+.pcl{background:#374151;color:#fff;border:none;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:8px;}
+.pad{padding-top:52px;}
+@media print{.pbar{display:none;}.pad{padding-top:0;}}
+.wrap{max-width:794px;margin:0 auto;}
+.hdr{background:#6C3CE1;color:#fff;padding:30px 40px 26px;}
+.hdr-row{display:flex;align-items:flex-start;justify-content:space-between;}
+.logo{font-size:30px;font-weight:800;letter-spacing:-1px;}
+.logo-s{font-size:11px;opacity:.7;margin-top:2px;}
+.hdr-tag{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;}
+.hdr-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:20px;}
+.hm{background:rgba(255,255,255,.12);border-radius:8px;padding:10px 14px;}
+.hm-l{font-size:9.5px;opacity:.6;margin-bottom:2px;text-transform:uppercase;letter-spacing:.5px;}
+.hm-v{font-size:13px;font-weight:700;}
+.body{padding:30px 40px;}
+.kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:26px;}
+.kc{border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;background:#FAFBFD;}
+.kl{font-size:10.5px;color:#64748B;font-weight:600;margin-bottom:3px;}
+.kv{font-size:21px;font-weight:800;letter-spacing:-.5px;font-family:monospace;}
+.ks{font-size:11px;color:#94A3B8;margin-top:2px;}
+.sec{margin-bottom:26px;}
+.stitle{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#6C3CE1;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #EEE8FF;display:flex;align-items:center;gap:7px;}
+table{width:100%;border-collapse:collapse;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;}
+th{background:#F8FAFC;text-align:left;font-size:10.5px;font-weight:700;color:#94A3B8;padding:10px 14px;border-bottom:2px solid #E2E8F0;text-transform:uppercase;letter-spacing:.5px;}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.citem{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:11px 14px;display:flex;align-items:flex-start;gap:8px;font-size:13px;}
+.foot{border-top:1px solid #E2E8F0;padding:14px 40px;display:flex;justify-content:space-between;font-size:11px;color:#94A3B8;}
+</style></head><body>
+<div class="pbar">
+  <span>📄 Отчёт сформирован — выберите «Сохранить как PDF» в диалоге печати</span>
+  <div><button class="pb" onclick="window.print()">🖨 Печать / Сохранить как PDF</button><button class="pcl" onclick="window.close()">✕</button></div>
+</div>
+<div class="pad"><div class="wrap">
+  <div class="hdr">
+    <div class="hdr-row"><div><div class="logo">CVPC</div><div class="logo-s">Conveyor Vision Production Counter</div></div><div class="hdr-tag">Отчёт по смене</div></div>
+    <div class="hdr-meta">
+      <div class="hm"><div class="hm-l">Линия</div><div class="hm-v">${l.name}</div></div>
+      <div class="hm"><div class="hm-l">Смена</div><div class="hm-v">${sh.lbl}</div></div>
+      <div class="hm"><div class="hm-l">Дата</div><div class="hm-v">${S.date}</div></div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="kgrid">
+      <div class="kc"><div class="kl">Выпуск за смену</div><div class="kv" style="color:#6C3CE1">${tf.toLocaleString('ru')} шт.</div><div class="ks">Фактический</div></div>
+      <div class="kc"><div class="kl">Плановый выпуск</div><div class="kv">${tp.toLocaleString('ru')} шт.</div><div class="ks">По заданию</div></div>
+      <div class="kc"><div class="kl">Выполнение плана</div><div class="kv" style="color:#16A34A">${pct}%</div><div class="ks" style="color:#16A34A">✓ Выполнен</div></div>
+      <div class="kc"><div class="kl">Отклонение</div><div class="kv" style="color:${devColor}">${devStr} шт.</div><div class="ks" style="color:${devColor}">${dev>=0?'Сверхплановый':'Недовыпуск'}</div></div>
+    </div>
+    <div class="sec"><div class="stitle">📊 Детализация по линиям</div><table><thead><tr><th>Линия</th><th>Статус</th><th>План (шт.)</th><th>Факт (шт.)</th><th>Выполнение</th></tr></thead><tbody>${lineRows}</tbody></table></div>
+    <div class="sec"><div class="stitle">🔍 История верификации</div><table><thead><tr><th>Время</th><th>Событие</th><th>Камера</th><th>Статус</th><th>Оператор</th></tr></thead><tbody>${verRows}</tbody></table></div>
+    <div class="sec"><div class="stitle">💡 Выводы по смене</div>
+      <div class="cgrid">
+        <div class="citem"><span style="color:#16A34A;font-size:15px;flex-shrink:0;">✅</span><span>${dev>=0?'Выпуск перевыполнен на '+Math.abs(dev)+' шт.':'Недовыполнение на '+Math.abs(dev)+' шт.'}</span></div>
+        <div class="citem"><span style="color:#16A34A;font-size:15px;flex-shrink:0;">✅</span><span>Качество распознавания — высокое.</span></div>
+        <div class="citem"><span style="color:#16A34A;font-size:15px;flex-shrink:0;">✅</span><span>Крупных расхождений не выявлено.</span></div>
+        <div class="citem"><span style="color:#16A34A;font-size:15px;flex-shrink:0;">✅</span><span>Линия 4 — Контроль показывает лучший результат.</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CVPC v1.2.0 · Автоматически сформированный отчёт</span><span>Дата формирования: ${new Date().toLocaleString('ru')}</span></div>
+</div></div></body></html>`;
+
+  const w=window.open('','_blank','width=920,height=750');
+  w.document.write(html);
+  w.document.close();
+  toast('Отчёт открыт — нажмите «Сохранить как PDF» 📄');
 }
 
 // MODALS
